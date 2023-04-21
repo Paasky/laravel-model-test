@@ -28,6 +28,8 @@ Configurations are public attributes of the TestsModels-Trait
 Full path(s) to look in for Model classes, includes sub-folders.  
 Default: `[app_path('Models')]`
 - `$this->modelPaths = [app_path('Models'), app_path('SuperCoolModels')];`
+- Tip: If your models are directly in `app`, you can skip auto-discovery and pass an array of classes to `assertModels()`:   
+`$this->assertModels([User::class, SomethingElse::class, ...]);`
 
 ## allowedInstances
 Classes that found classes can be an instance of.  
