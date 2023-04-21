@@ -5,7 +5,7 @@
   "keywords": ["test", "laravel", "eloquent", "model"],
   "homepage": "https://github.com/paasky",
   "license": "MIT",
-  "require-dev": {
+  "require": {
     "php": ">=7.2",
     "laravel/framework": ">=6",
     "wyrihaximus/list-classes-in-directory": ">=1.5",
