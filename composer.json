@@ -1,0 +1,22 @@
+{
+  "name": "paasky/laravel-model-test",
+  "type": "library",
+  "description": "Tests Eloquent Model instances and relations",
+  "keywords": ["test", "laravel", "eloquent", "model"],
+  "homepage": "https://github.com/paasky",
+  "license": "MIT",
+  "require-dev": {
+    "php": ">=7.2",
+    "laravel/framework": ">=6",
+    "wyrihaximus/list-classes-in-directory": ">=1.5",
+    "phpunit/phpunit": ">=8",
+    "roave/better-reflection": ">=6.10.x-dev"
+  },
+  "autoload": {
+    "psr-4": { "Paasky\\LaravelModelTest\\": "src" }
+  },
+  "autoload-dev": {
+    "psr-4": { "Paasky\\LaravelModelTest\\Tests\\": "tests" }
+  },
+  "minimum-stability": "dev"
+}
