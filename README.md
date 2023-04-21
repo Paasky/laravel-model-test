@@ -45,3 +45,9 @@ Default: `false` (Fail)
 Override `allowedInstances` for specific classes by setting the required instance.  
 Default: `['App\User' => Authenticatable::class, 'App\Models\User' => Authenticatable::class]`
 - `$this->requiredInstancePerModel = [SimpleUser::class => Model::class];`
+
+## ignoreMethodsPerNamespace
+Ignore these methods from validation, useful when packages don't typehint the return type and are failing.  
+Use `'*'` to ignore all methods in a namespace.  
+Default: `['Illuminate\\' => ['*']`
+- `$this->ignoreMethodsPerNamespace = ['Illuminate\\' => ['*'], 'SomeDude\\Package\\' => ['dumbMethod']];`

@@ -33,6 +33,13 @@ trait TestsModels
         'App\Models\User' => Authenticatable::class,
     ];
 
+    /**
+     * @var array[] Ignore these methods from validation, useful when packages don't typehint the return type and are failing
+     */
+    public $ignoreMethodsPerNamespace = [
+        'Illuminate\\' => ['*'],
+    ];
+
     /** @var bool Never set this to true, only used in internal unit tests. */
     protected $inSelfTestMode = false;
 
@@ -44,10 +51,15 @@ trait TestsModels
      */
     public function assertModels(array $modelClasses = []): void
     {
-        foreach ($this->modelPaths ?: [app_path('Models')] as $modelPath) {
-            $classNames = $modelClasses ?: listInstantiatableClassesInDirectory($modelPath);
+        if ($modelClasses) {
+            foreach ($modelClasses as $className) {
+                $this->assertModel($className);
+            }
+            return;
+        }
 
-            foreach ($classNames as $className) {
+        foreach ($this->modelPaths ?: [app_path('Models')] as $modelPath) {
+            foreach (listInstantiatableClassesInDirectory($modelPath) as $className) {
                 $this->assertModel($className);
             }
         }
@@ -62,11 +74,6 @@ trait TestsModels
 
     public function assertModelInstance(string $className): void
     {
-        // Skip validation for non-Model classes if allowed
-        if (!is_subclass_of($className, Model::class) && $this->allowNonModels) {
-            return;
-        }
-
         if (isset($this->requiredInstancePerModel[$className])) {
             $requiredInstance = $this->requiredInstancePerModel[$className];
             $this->assertIsTrue(
@@ -74,6 +81,11 @@ trait TestsModels
                 "$className must be an instanceof $requiredInstance"
             );
         } else {
+            // Skip validation for non-Model classes if allowed
+            if (!is_subclass_of($className, Model::class) && $this->allowNonModels) {
+                return;
+            }
+
             $isClassOneOfAllowedInstances = false;
             foreach ($this->allowedInstances as $allowedInstance) {
                 if (is_subclass_of($className, $allowedInstance)) {
@@ -114,6 +126,17 @@ trait TestsModels
             return;
         }
 
+        // Check if the method should be ignored
+        foreach ($this->ignoreMethodsPerNamespace as $namespace => $methodsToIgnore) {
+            if (str_starts_with($method->getDeclaringClass()->getNamespaceName(), $namespace)) {
+                foreach ($methodsToIgnore as $methodToIgnore) {
+                    if ($methodName === $methodToIgnore || $methodToIgnore === '*') {
+                        return;
+                    }
+                }
+            }
+        }
+
         // Test each relation method works by running `->get()` on it
         try {
             /** @var Model $class */
@@ -145,11 +168,6 @@ trait TestsModels
     {
         $methodName = $method->getName();
 
-        // Ignore all methods defined within Illuminate
-        if (str_starts_with($method->getDeclaringClass()->getNamespaceName(), 'Illuminate\\')) {
-            return null;
-        }
-
         if ($returnType = $method->getReturnType()) {
             // If the known return type is not a class (getName() doesn't exist)
             // Or the return type name is not a subclass of an Eloquent Relation
@@ -164,10 +182,7 @@ trait TestsModels
         $returnValue = $class->{$methodName}();
 
         // Can only test methods that return a Relation
-        if (!$returnValue instanceof Relation) {
-            return null;
-        }
-        return $returnValue;
+        return $returnValue instanceof Relation ? $returnValue : null;
     }
 
     /**
