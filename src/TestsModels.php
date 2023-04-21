@@ -3,6 +3,7 @@
 namespace Paasky\LaravelModelTest;
 
 use Exception;
+use Illuminate\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
@@ -16,26 +17,28 @@ use function WyriHaximus\listInstantiatableClassesInDirectory;
  */
 trait TestsModels
 {
-    /** @var string[] Full path(s) to look in for Model classes*/
+    /** @var string[] Full path(s) to look in for Model classes, is recursive. */
     public $modelPaths = ['/path/to/project/app/Models'];
 
-    /** @var string[] Classes that the found Models can be an instance of */
+    /** @var string[] Classes that found classes can be an instance of. */
     public $allowedInstances = [Model::class];
 
-    /** @var bool Set to true to skip (rather than fail) classes that are not Models */
+    /** @var bool Set to true to skip (rather than fail) classes that are not Models. */
     public $allowNonModels = false;
 
-    /** @var string[] Override `allowedInstances` by setting the specific instance required per class */
+    /** @var string[] Override `allowedInstances` by setting the specific instance required per class. */
     public $requiredInstancePerModel = [
-        'App\User' => Model::class,
-        'App\Models\User' => Model::class,
+        'App\User' => Authenticatable::class,
+        'App\Models\User' => Authenticatable::class,
     ];
 
-    /** @var bool Never set this to true, only used in internal unit tests */
+    /** @var bool Never set this to true, only used in internal unit tests. */
     protected $inSelfTestMode = false;
 
     /**
-     * @param string[] $modelClasses
+     * This is the main function that will find all instantiable classes & test them.
+     *
+     * @param string[] $modelClasses Override automatic folder-scan with these classes
      * @return void
      */
     public function assertModels(array $modelClasses = []): void
@@ -131,22 +134,39 @@ trait TestsModels
         }
     }
 
+    /**
+     * Override assertTrue to allow for unit testing
+     *
+     * @param mixed $condition
+     * @param string $message
+     * @return void
+     * @throws Exception
+     */
     protected function assertIsTrue($condition, string $message = ''): void
     {
-        if ($this->inSelfTestMode && !$condition) {
+        if ($this->inSelfTestMode && $condition !== true) {
             throw new Exception($message ?: "Failed asserting that false is true.");
-        } else {
-            $this->assertTrue($condition, $message);
         }
+        $this->assertTrue($condition, $message);
     }
 
+    /**
+     * Override assertEquals to allow for unit testing
+     *
+     * @param mixed $expected
+     * @param mixed $actual
+     * @param string $message
+     * @return void
+     * @throws Exception
+     */
     protected function assertIsEqual($expected, $actual, string $message = ''): void
     {
-        $isEqual = new IsEqual($expected);
-        if ($this->inSelfTestMode && !$isEqual->evaluate($actual)) {
-            throw new Exception($message ?: "Failed asserting that {$isEqual->toString()}.");
-        } else {
-            $this->assertEquals($expected, $actual, $message);
+        if ($this->inSelfTestMode) {
+            $isEqual = new IsEqual($expected);
+            if (!$isEqual->evaluate($actual)) {
+                throw new Exception($message ?: "Failed asserting that {$isEqual->toString()}.");
+            }
         }
+        $this->assertEquals($expected, $actual, $message);
     }
 }
