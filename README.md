@@ -11,7 +11,7 @@ use Paasky\TestsModels;
 
 class MyTests extends TestCase
 {
-    use TestsModels;
+    use RefreshDatabase, TestsModels;
     
     public function testModels()
     {

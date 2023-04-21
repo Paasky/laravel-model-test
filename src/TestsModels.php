@@ -3,9 +3,9 @@
 namespace Paasky\LaravelModelTest;
 
 use Exception;
-use Illuminate\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Collection;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Constraint\IsEqual;
@@ -62,24 +62,21 @@ trait TestsModels
 
     public function assertModelInstance(string $className): void
     {
-        /** @var Model $class */
-        $class = new $className;
-
         // Skip validation for non-Model classes if allowed
-        if (!$class instanceof Model && $this->allowNonModels) {
+        if (!is_subclass_of($className, Model::class) && $this->allowNonModels) {
             return;
         }
 
         if (isset($this->requiredInstancePerModel[$className])) {
             $requiredInstance = $this->requiredInstancePerModel[$className];
             $this->assertIsTrue(
-                $class instanceof $requiredInstance,
-                "$className must be instanceof $requiredInstance"
+                is_subclass_of($className, $requiredInstance),
+                "$className must be an instanceof $requiredInstance"
             );
         } else {
             $isClassOneOfAllowedInstances = false;
             foreach ($this->allowedInstances as $allowedInstance) {
-                if ($class instanceof $allowedInstance) {
+                if (is_subclass_of($className, $allowedInstance)) {
                     $isClassOneOfAllowedInstances = true;
                     break;
                 }
@@ -148,8 +145,8 @@ trait TestsModels
     {
         $methodName = $method->getName();
 
-        // Ignore all methods defined within Eloquent
-        if (stristr($method->getDeclaringClass()->getNamespaceName(), 'Illuminate\Database\Eloquent')) {
+        // Ignore all methods defined within Illuminate
+        if (str_starts_with($method->getDeclaringClass()->getNamespaceName(), 'Illuminate\\')) {
             return null;
         }
 
