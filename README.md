@@ -15,7 +15,6 @@ class MyTests extends TestCase
     
     public function testModels()
     {
-        $this->modelPaths = [app_path('Models')];
         $this->assertModels();
     }
 }
