@@ -10,13 +10,12 @@
     "laravel/framework": ">=6",
     "wyrihaximus/list-classes-in-directory": ">=1.5",
     "phpunit/phpunit": ">=8",
-    "roave/better-reflection": ">=6.10.x-dev"
+    "roave/better-reflection": ">=6"
   },
   "autoload": {
     "psr-4": { "Paasky\\LaravelModelTest\\": "src" }
   },
   "autoload-dev": {
     "psr-4": { "Paasky\\LaravelModelTest\\Tests\\": "tests" }
-  },
-  "minimum-stability": "dev"
+  }
 }

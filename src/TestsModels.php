@@ -10,6 +10,7 @@ use Illuminate\Support\Collection;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Constraint\IsEqual;
 use Roave\BetterReflection\Reflection\ReflectionClass;
+use Roave\BetterReflection\Reflection\ReflectionMethod;
 use function WyriHaximus\listInstantiatableClassesInDirectory;
 
 /**
@@ -93,37 +94,45 @@ trait TestsModels
 
     public function assertModelMethods(string $className): void
     {
+        $classReflection = ReflectionClass::createFromName($className);
         foreach (get_class_methods($className) as $methodName) {
-            $this->assertModelMethod($className, $methodName);
+            $this->assertModelMethod($classReflection, $methodName);
         }
     }
 
-    public function assertModelMethod(string $className, string $methodName): void
+    /**
+     * @param string|ReflectionClass $class
+     * @param string $methodName
+     * @return void
+     * @throws Exception
+     */
+    public function assertModelMethod($class, string $methodName): void
     {
-        /** @var Model $class */
-        $class = new $className;
-        $reflection = ReflectionClass::createFromName($className);
-
-        $method = $reflection->getMethod($methodName);
+        $className = is_string($class) ? $class : $class->getName();
+        $classReflection = is_string($class) ? ReflectionClass::createFromName($class) : $class;
+        $method = $classReflection->getMethod($methodName);
 
         // Can only test methods with 0 required params
         if ($method->getNumberOfRequiredParameters() > 0) {
             return;
         }
-        $methodReturnValue = $class->{$methodName}();
-
-        // Can only test methods that return a Relation
-        if (!$methodReturnValue instanceof Relation) {
-            return;
-        }
 
         // Test each relation method works by running `->get()` on it
         try {
+            /** @var Model $class */
+            $class = new $className;
+            $methodReturnValue = $this->getMethodRelation($class, $method);
+
+            // Can only test methods that return a Relation
+            if (!$methodReturnValue) {
+                return;
+            }
+
             $getOutput = $class->{$methodName}()->get();
             $this->assertIsTrue(
                 $getOutput instanceof Collection,
                 "$className->$methodName()->get() output needs to be a Collection, was " .
-                    is_object($getOutput) ? get_class($getOutput) : gettype($getOutput)
+                is_object($getOutput) ? get_class($getOutput) : gettype($getOutput)
             );
         } catch (Exception $e) {
             // Make an assertion that always fails, so we get the method name in the output
@@ -133,6 +142,35 @@ trait TestsModels
                 "$className->$methodName() is invalid"
             );
         }
+    }
+
+    protected function getMethodRelation(Model $class, ReflectionMethod $method): ?Relation
+    {
+        $methodName = $method->getName();
+
+        // Ignore all methods defined within Eloquent
+        if (stristr($method->getDeclaringClass()->getNamespaceName(), 'Illuminate\Database\Eloquent')) {
+            return null;
+        }
+
+        if ($returnType = $method->getReturnType()) {
+            // If the known return type is not a class (getName() doesn't exist)
+            // Or the return type name is not a subclass of an Eloquent Relation
+            // -> skip the method
+            if (!method_exists($returnType, 'getName') ||
+                !is_subclass_of($returnType->getName(), Relation::class)
+            ) {
+                return null;
+            }
+        }
+
+        $returnValue = $class->{$methodName}();
+
+        // Can only test methods that return a Relation
+        if (!$returnValue instanceof Relation) {
+            return null;
+        }
+        return $returnValue;
     }
 
     /**
