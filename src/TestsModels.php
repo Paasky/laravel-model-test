@@ -4,6 +4,17 @@ namespace Paasky\LaravelModelTest;
 
 use Exception;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Database\Eloquent\Relations\MorphOneOrMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Collection;
@@ -40,8 +51,23 @@ trait TestsModels
         'Illuminate\\' => ['*'],
     ];
 
+    /** @var bool Should back relations (related models relate back as well) be validated */
+    public $enableBackRelationValidation = true;
+
+    /** @var bool Should back relation return types be validated */
+    public $enableBackRelationTypeValidation = true;
+
+    /** @var array[] Methods (* for all) to skip for back relation validation */
+    public $skipBackRelationMethodsValidationPerModel = [
+        'App\User' => ['tokens'],
+        'App\Models\User' => ['tokens'],
+    ];
+
     /** @var bool Never set this to true, only used in internal unit tests. */
     protected $inSelfTestMode = false;
+
+    /** @var array Used internally to keep track of seen relations, to verify all go both ways */
+    protected $seenRelations = [];
 
     /**
      * This is the main function that will find all instantiable classes & test them.
@@ -55,14 +81,14 @@ trait TestsModels
             foreach ($modelClasses as $className) {
                 $this->assertModel($className);
             }
-            return;
-        }
-
-        foreach ($this->modelPaths ?: [app_path('Models')] as $modelPath) {
-            foreach (listInstantiatableClassesInDirectory($modelPath) as $className) {
-                $this->assertModel($className);
+        } else {
+            foreach ($this->modelPaths ?: [app_path('Models')] as $modelPath) {
+                foreach (listInstantiatableClassesInDirectory($modelPath) as $className) {
+                    $this->assertModel($className);
+                }
             }
         }
+        $this->assertBackRelations();
     }
 
     public function assertModel(string $className): void
@@ -72,6 +98,13 @@ trait TestsModels
         $this->assertModelMethods($className);
     }
 
+    /**
+     * Check the Model is an instance of a valid parent-class
+     *
+     * @param string $className
+     * @return void
+     * @throws Exception
+     */
     public function assertModelInstance(string $className): void
     {
         if (isset($this->requiredInstancePerModel[$className])) {
@@ -110,6 +143,8 @@ trait TestsModels
     }
 
     /**
+     * If the given method returns a Relation, check it works
+     *
      * @param string|ReflectionClass $class
      * @param string $methodName
      * @return void
@@ -164,6 +199,113 @@ trait TestsModels
         }
     }
 
+    /**
+     * Check each seen relation also has a back-relation (eg User HasMany Posts, so Post must BelongTo User)
+     *
+     * @return void
+     */
+    public function assertBackRelations(): void
+    {
+        if (!$this->enableBackRelationValidation) {
+            return;
+        }
+
+        // Check each class we found relations in
+        foreach ($this->seenRelations as $className => $seenRelations) {
+            // Should all methods of this class be skipped
+            if (in_array('*', $this->skipBackRelationMethodsValidationPerModel[$className] ?? [])) {
+                continue;
+            }
+
+            foreach ($seenRelations as [$methodName, $relationClassName, $relatedClassName]) {
+                // Should this method be skipped
+                if (in_array($methodName, $this->skipBackRelationMethodsValidationPerModel[$className] ?? [])) {
+                    continue;
+                }
+
+                $this->assertIsTrue(
+                    $this->wasBackRelationSeen($className, $methodName, $relationClassName, $relatedClassName),
+                    "$className->$methodName() relates to $relatedClassName by $relationClassName, but no back relation was seen"
+                );
+            }
+        }
+    }
+
+    /**
+     * Was the back-relation seen during the earlier @see assertModels()
+     *
+     * @param string $className Model
+     * @param string $methodName
+     * @param string $relationClassName Relation
+     * @param string $relatedClassName Model
+     * @return bool
+     * @throws Exception
+     */
+    protected function wasBackRelationSeen(string $className, string $methodName, string $relationClassName, string $relatedClassName): bool
+    {
+        foreach ($this->seenRelations as $lookupClassName => $lookupSeenRelations) {
+            foreach ($lookupSeenRelations as [$lookupMethodName, $lookupRelationClassName, $lookupRelatedClassName]) {
+                // If both relate to each other
+                if ($className === $lookupRelatedClassName && $lookupClassName == $relatedClassName) {
+                    // If enabled, check the back-relation is appropriate for the orig relation
+                    if ($this->enableBackRelationTypeValidation) {
+
+                        $expectedRelationClassNames = $this->getExpectedBackRelationClassNames($relationClassName);
+
+                        if (!$expectedRelationClassNames) {
+                            throw new Exception("Unknown relation type $relationClassName in $className->$methodName()");
+                        }
+
+                        $this->assertIsTrue(
+                            in_array($lookupRelationClassName, $expectedRelationClassNames),
+                            "$className->$methodName() returns $relationClassName, but $lookupClassName->$lookupMethodName() does not return " . implode(' or ', $expectedRelationClassNames)
+                        );
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Given a Relation-class name, returns an array of expected back-relation classes
+     *
+     * @param string $relationClassName
+     * @return string[]
+     */
+    protected function getExpectedBackRelationClassNames(string $relationClassName): array
+    {
+        switch ($relationClassName) {
+            case BelongsTo::class:
+                return [HasMany::class, HasOne::class, HasOneOrMany::class];
+            case HasMany::class:
+            case HasOne::class:
+            case HasOneOrMany::class:
+                return [BelongsTo::class];
+            case MorphTo::class:
+                return [MorphMany::class, MorphOne::class, MorphOneOrMany::class];
+            case MorphMany::class:
+            case MorphOne::class:
+            case MorphOneOrMany::class:
+                return [MorphTo::class];
+            case BelongsToMany::class:
+                return [BelongsToMany::class];
+            case HasManyThrough::class:
+            case HasOneThrough::class:
+                return [HasManyThrough::class, HasOneThrough::class];
+            default:
+                return [];
+        }
+    }
+
+    /**
+     * Returns the Relation-class of the class method, null if it's not a Relation
+     *
+     * @param Model $class
+     * @param ReflectionMethod $method
+     * @return Relation|null
+     */
     protected function getMethodRelation(Model $class, ReflectionMethod $method): ?Relation
     {
         $methodName = $method->getName();
@@ -182,7 +324,33 @@ trait TestsModels
         $returnValue = $class->{$methodName}();
 
         // Can only test methods that return a Relation
-        return $returnValue instanceof Relation ? $returnValue : null;
+        if ($returnValue instanceof Relation) {
+            if ($this->enableBackRelationValidation) {
+                $this->setSeenRelation(
+                    get_class($class),
+                    $methodName,
+                    get_class($returnValue),
+                    get_class($returnValue->getRelated())
+                );
+            }
+            return $returnValue;
+        }
+
+        return null;
+    }
+
+    /**
+     * Keep track of seen relations
+     *
+     * @param string $className Model
+     * @param string $methodName
+     * @param string $relationClassName Relation
+     * @param string $relatedClassName Model
+     * @return void
+     */
+    protected function setSeenRelation(string $className, string $methodName, string $relationClassName, string $relatedClassName)
+    {
+        $this->seenRelations[$className][] = [$methodName, $relationClassName, $relatedClassName];
     }
 
     /**

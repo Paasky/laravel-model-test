@@ -44,10 +44,27 @@ Default: `false` (Fail)
 ## requiredInstancePerModel
 Override `allowedInstances` for specific classes by setting the required instance.  
 Default: `['App\User' => Authenticatable::class, 'App\Models\User' => Authenticatable::class]`
-- `$this->requiredInstancePerModel = [SimpleUser::class => Model::class];`
+- `$this->requiredInstancePerModel[SimpleUser::class] = Model::class;`
 
 ## ignoreMethodsPerNamespace
-Ignore these methods from validation, useful when packages don't typehint the return type and are failing.  
-Use `'*'` to ignore all methods in a namespace.  
+Ignore these methods from validation, useful when packages don't typehint the return type and are failing  
+Use `'*'` to ignore all methods in the namespace  
 Default: `['Illuminate\\' => ['*']`
-- `$this->ignoreMethodsPerNamespace = ['Illuminate\\' => ['*'], 'SomeDude\\Package\\' => ['dumbMethod']];`
+- `$this->ignoreMethodsPerNamespace['SomeDude\\Package\\'] = ['dumbMethod'];`
+
+## enableBackRelationValidation
+Should back relations (eg User has Post, so Post must have User) be validated  
+Default: `true`
+- `$this->enableBackRelationValidation = false;`
+ 
+## enableBackRelationTypeValidation
+Should back relation return types (eg User HasMany Posts, so Post must BelongTo User) be validated  
+Default: `true`
+- `$this->enableBackRelationTypeValidation = false;`
+ 
+## skipBackRelationMethodsValidationPerModel
+Methods to skip for back relation validation  
+Use `'*'` to ignore all methods of the class  
+Default: `['App\User' => ['tokens'], 'App\Models\User' => ['tokens']]`
+- `$this->skipBackRelationMethodsValidationPerModel[PivotModel::class] = ['*'];`
+ 
