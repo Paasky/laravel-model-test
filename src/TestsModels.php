@@ -18,7 +18,7 @@ use function WyriHaximus\listInstantiatableClassesInDirectory;
 trait TestsModels
 {
     /** @var string[] Full path(s) to look in for Model classes, is recursive. */
-    public $modelPaths = ['/path/to/project/app/Models'];
+    public $modelPaths = []; // Defaults to [app_path('Models')]
 
     /** @var string[] Classes that found classes can be an instance of. */
     public $allowedInstances = [Model::class];
@@ -43,7 +43,7 @@ trait TestsModels
      */
     public function assertModels(array $modelClasses = []): void
     {
-        foreach ($this->modelPaths as $modelPath) {
+        foreach ($this->modelPaths ?: [app_path('Models')] as $modelPath) {
             $classNames = $modelClasses ?: listInstantiatableClassesInDirectory($modelPath);
 
             foreach ($classNames as $className) {
@@ -64,6 +64,11 @@ trait TestsModels
         /** @var Model $class */
         $class = new $className;
 
+        // Skip validation for non-Model classes if allowed
+        if (!$class instanceof Model && $this->allowNonModels) {
+            return;
+        }
+
         if (isset($this->requiredInstancePerModel[$className])) {
             $requiredInstance = $this->requiredInstancePerModel[$className];
             $this->assertIsTrue(
@@ -77,10 +82,6 @@ trait TestsModels
                     $isClassOneOfAllowedInstances = true;
                     break;
                 }
-            }
-
-            if (!$isClassOneOfAllowedInstances && !$class instanceof Model && $this->allowNonModels) {
-                return;
             }
 
             $this->assertIsTrue(
