@@ -9,7 +9,7 @@ In any PHPUnit test
 ```
 use Paasky\TestsModels;
 
-class MyTests extends TestCase
+class MyTest extends TestCase
 {
     use RefreshDatabase, TestsModels;
     
@@ -32,7 +32,7 @@ Default: `[app_path('Models')]`
 `$this->assertModels([User::class, SomethingElse::class, ...]);`
 
 ## allowedInstances
-Classes that found classes can be an instance of.  
+Classes that found classes can be an instance of. Useful if your project has a custom Model-class.  
 Default: `[Model::class]`
 - `$this->allowedInstances = [ProjectModel::class];`
 

@@ -3,6 +3,7 @@
 namespace Paasky\LaravelModelTest;
 
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -176,14 +177,14 @@ trait TestsModels
         try {
             /** @var Model $class */
             $class = new $className;
-            $methodReturnValue = $this->getMethodRelation($class, $method);
+            $methodReturnValue = $this->getMethodReturnValue($class, $method);
 
-            // Can only test methods that return a Relation
+            // Can only test methods that return a Relation or Builder
             if (!$methodReturnValue) {
                 return;
             }
 
-            $getOutput = $class->{$methodName}()->get();
+            $getOutput = $methodReturnValue->get();
             $this->assertIsTrue(
                 $getOutput instanceof Collection,
                 "$className->$methodName()->get() output needs to be a Collection, was " .
@@ -304,9 +305,9 @@ trait TestsModels
      *
      * @param Model $class
      * @param ReflectionMethod $method
-     * @return Relation|null
+     * @return Relation|Builder|null
      */
-    protected function getMethodRelation(Model $class, ReflectionMethod $method): ?Relation
+    protected function getMethodReturnValue(Model $class, ReflectionMethod $method)
     {
         $methodName = $method->getName();
 
@@ -315,7 +316,10 @@ trait TestsModels
             // Or the return type name is not a subclass of an Eloquent Relation
             // -> skip the method
             if (!method_exists($returnType, 'getName') ||
-                !is_subclass_of($returnType->getName(), Relation::class)
+                !(
+                    is_subclass_of($returnType->getName(), Relation::class) ||
+                    is_subclass_of($returnType->getName(), Builder::class)
+                )
             ) {
                 return null;
             }
@@ -323,7 +327,6 @@ trait TestsModels
 
         $returnValue = $class->{$methodName}();
 
-        // Can only test methods that return a Relation
         if ($returnValue instanceof Relation) {
             if ($this->enableBackRelationValidation) {
                 $this->setSeenRelation(
@@ -333,6 +336,10 @@ trait TestsModels
                     get_class($returnValue->getRelated())
                 );
             }
+            return $returnValue;
+        }
+
+        if ($returnValue instanceof Builder) {
             return $returnValue;
         }
 
